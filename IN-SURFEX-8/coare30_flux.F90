@@ -70,6 +70,7 @@ USE MODD_CSTS,       ONLY : XKARMAN, XG, XSTEFAN, XRD, XRV, XPI, &
 USE MODD_SURF_ATM,   ONLY : XVZ0CM
 !
 USE MODD_SFX_OASIS,  ONLY : LCPL_WAVE
+!
 USE MODD_SURF_PAR,   ONLY : XUNDEF, XSURF_EPSILON
 USE MODD_WATER_PAR
 !
@@ -91,7 +92,6 @@ IMPLICIT NONE
 !*      0.1    declarations of arguments
 !
 !
-!!
 !
 TYPE(SEAFLUX_t), INTENT(INOUT) :: S
 !
@@ -165,7 +165,7 @@ REAL, DIMENSION(SIZE(PTA))      :: ZBF               !constants to compute gusti
 REAL, DIMENSION(SIZE(PTA))      :: ZTAU       !momentum flux (W/m2)
 REAL, DIMENSION(SIZE(PTA))      :: ZHF        !sensible heat flux (W/m2)
 REAL, DIMENSION(SIZE(PTA))      :: ZEF        !latent heat flux (W/m2)
-REAL, DIMENSION(SIZE(PTA))      :: ZWBAR      !diag for webb correction but not used here after
+!!REAL, DIMENSION(SIZE(PTA))      :: ZWBAR      !diag for webb correction but not used here after
 REAL, DIMENSION(SIZE(PTA))      :: ZTAUR      !momentum flux due to rain (W/m2)
 REAL, DIMENSION(SIZE(PTA))      :: ZRF        !sensible heat flux due to rain (W/m2)
 REAL, DIMENSION(SIZE(PTA))      :: ZCHN,ZCEN  !neutral coef. for heat and vapor
@@ -430,7 +430,7 @@ ZTAU(:) = XUNDEF
 ZHF(:)  = XUNDEF
 ZEF(:)  = XUNDEF
 !
-ZWBAR(:) = 0.
+!!ZWBAR(:) = 0.
 ZTAUR(:) = 0.
 ZRF(:)   = 0.
 !
@@ -452,71 +452,62 @@ DO J=1,SIZE(PTA)
   !
   !            4. 2 surface fluxes 
   !
-  IF (ABS(PCDN(J))>1.E-2) THEN   !!!! secure COARE3.0 CODE 
-    write(*,*) 'pb PCDN in COARE30: ',PCDN(J)
-    write(*,*) 'point: ',J,"/",SIZE(PTA)
-    write(*,*) 'roughness: ', ZO(J)
-    write(*,*) 'ustar: ',ZUSR(J)
-    write(*,*) 'wind: ',ZDUWG(J)
-    CALL ABOR1_SFX('COARE30: PCDN too large -> no convergence')
-  ELSE
-    ZTSR(J) = -ZTSR(J)
-    ZQSR(J) = -ZQSR(J)
-    ZTAU(J) = -PRHOA(J)*ZUSR(J)*ZUSR(J)*ZVMOD(J)/ZDUWG(J)
-    ZHF(J)  =  PRHOA(J)*XCPD*ZUSR(J)*ZTSR(J)
-    ZEF(J)  =  PRHOA(J)*ZLV(J)*ZUSR(J)*ZQSR(J)
-    !    
-    !           4.3 Contributions to surface  fluxes due to rainfall
-    !
-    ! SB: a priori, le facteur ZRDSRV=XRD/XRV est introduit pour
-    !     adapter la formule de Clausius-Clapeyron (pour l'air
-    !     sec) au cas humide.
-    IF (S%LPRECIP) THEN
-      ! 
-      ! heat surface  fluxes
-      !
-      ZTAC(J)  = ZTA(J)-XTT
-      !
-      ZXLR(J)  = XLVTT + (XCPV-XCL)* ZTAC(J)                            ! latent heat of rain vaporization
-      ZDQSDT(J)= ZQASAT(J) * ZXLR(J) / (XRD*ZTA(J)**2)                  ! Clausius-Clapeyron relation
-      ZDTMP(J) = (1.0 + 3.309e-3*ZTAC(J) -1.44e-6*ZTAC(J)*ZTAC(J)) * &  !heat diffusivity
-                  0.02411 / (PRHOA(J)*XCPD)
-      !
-      ZDWAT(J) = 2.11e-5 * (XP00/ZPA(J)) * (ZTA(J)/XTT)**1.94           ! water vapour diffusivity from eq (13.3)
-      !                                                                 ! of Pruppacher and Klett (1978)      
-      ZALFAC(J)= 1.0 / (1.0 + &                                         ! Eq.11 in GoF95
-                   ZRDSRV*ZDQSDT(J)*ZXLR(J)*ZDWAT(J)/(ZDTMP(J)*XCPD))   ! ZALFAC=wet-bulb factor (sans dim)     
-      ZCPLW(J) = 4224.8482 + ZTAC(J) * &
-                              ( -4.707 + ZTAC(J) * &
-                                (0.08499 + ZTAC(J) * &
-                                  (1.2826e-3 + ZTAC(J) * &
-                                    (4.7884e-5 - 2.0027e-6* ZTAC(J))))) ! specific heat  
-      !       
-      ZRF(J)   = PRAIN(J) * ZCPLW(J) * ZALFAC(J) * &                    !Eq.12 in GoF95 !SIGNE?
-                   (PSST(J) - ZTA(J) + (PQSAT(J)-PQA(J))*ZXLR(J)/XCPD )
-      !
-      ! Momentum flux due to rainfall  
-      !
-      ZTAUR(J)=-0.85*(PRAIN(J) *ZVMOD(J)) !pp3752 in FBR96
-      !
-    ENDIF
-    !
-    !             4.4   Webb correction to latent heat flux
+  ZTSR(J) = -ZTSR(J)
+  ZQSR(J) = -ZQSR(J)
+  ZTAU(J) = -PRHOA(J)*ZUSR(J)*ZUSR(J)*ZVMOD(J)/ZDUWG(J)
+  ZHF(J)  =  PRHOA(J)*XCPD*ZUSR(J)*ZTSR(J)
+  ZEF(J)  =  PRHOA(J)*ZLV(J)*ZUSR(J)*ZQSR(J)
+  !    
+  !           4.3 Contributions to surface  fluxes due to rainfall
+  !
+  ! SB: a priori, le facteur ZRDSRV=XRD/XRV est introduit pour
+  !     adapter la formule de Clausius-Clapeyron (pour l'air
+  !     sec) au cas humide.
+  IF (S%LPRECIP) THEN
     ! 
-    ZWBAR(J)=- (1./ZRDSRV)*ZUSR(J)*ZQSR(J) / (1.0+(1./ZRDSRV)*PQA(J)) &
-               - ZUSR(J)*ZTSR(J)/ZTA(J)                        ! Eq.21*rhoa in FBR96    
+    ! heat surface  fluxes
     !
-    !             4.5   friction velocity which contains correction du to rain            
+    ZTAC(J)  = ZTA(J)-XTT
     !
-    ZUSTAR2(J)= - (ZTAU(J) + ZTAUR(J)) / PRHOA(J)
-    PUSTAR(J) =  SQRT(ZUSTAR2(J))
+    ZXLR(J)  = XLVTT + (XCPV-XCL)* ZTAC(J)                            ! latent heat of rain vaporization
+    ZDQSDT(J)= ZQASAT(J) * ZXLR(J) / (XRD*ZTA(J)**2)                  ! Clausius-Clapeyron relation
+    ZDTMP(J) = (1.0 + 3.309e-3*ZTAC(J) -1.44e-6*ZTAC(J)*ZTAC(J)) * &  !heat diffusivity
+                0.02411 / (PRHOA(J)*XCPD)
     !
-    !             4.6   Total surface fluxes
-    !           
-    PSFTH (J) =  ZHF(J) + ZRF(J)
-    PSFTQ (J) =  ZEF(J) / ZLV(J)
-    ! 
+    ZDWAT(J) = 2.11e-5 * (XP00/ZPA(J)) * (ZTA(J)/XTT)**1.94           ! water vapour diffusivity from eq (13.3)
+    !                                                                 ! of Pruppacher and Klett (1978)      
+    ZALFAC(J)= 1.0 / (1.0 + &                                         ! Eq.11 in GoF95
+                 ZRDSRV*ZDQSDT(J)*ZXLR(J)*ZDWAT(J)/(ZDTMP(J)*XCPD))   ! ZALFAC=wet-bulb factor (sans dim)     
+    ZCPLW(J) = 4224.8482 + ZTAC(J) * &
+                            ( -4.707 + ZTAC(J) * &
+                              (0.08499 + ZTAC(J) * &
+                                (1.2826e-3 + ZTAC(J) * &
+                                  (4.7884e-5 - 2.0027e-6* ZTAC(J))))) ! specific heat  
+    !       
+    ZRF(J)   = PRAIN(J) * ZCPLW(J) * ZALFAC(J) * &                    !Eq.12 in GoF95 !SIGNE?
+                 (PSST(J) - ZTA(J) + (PQSAT(J)-PQA(J))*ZXLR(J)/XCPD )
+    !
+    ! Momentum flux due to rainfall  
+    !
+    ZTAUR(J)=-0.85*(PRAIN(J) *ZVMOD(J)) !pp3752 in FBR96
+    !
   ENDIF
+  !
+  !             4.4   Webb correction to latent heat flux
+  ! 
+  !!ZWBAR(J)=- (1./ZRDSRV)*ZUSR(J)*ZQSR(J) / (1.0+(1./ZRDSRV)*PQA(J)) &
+  !!           - ZUSR(J)*ZTSR(J)/ZTA(J)                        ! Eq.21*rhoa in FBR96    
+  !
+  !             4.5   friction velocity which contains correction du to rain            
+  !
+  ZUSTAR2(J)= - (ZTAU(J) + ZTAUR(J)) / PRHOA(J)
+  PUSTAR(J) =  SQRT(ZUSTAR2(J))
+  !
+  !             4.6   Total surface fluxes
+  !           
+  PSFTH (J) =  ZHF(J) + ZRF(J)
+  PSFTQ (J) =  ZEF(J) / ZLV(J)
+  ! 
 ENDDO                      
 !-------------------------------------------------------------------------------
 !

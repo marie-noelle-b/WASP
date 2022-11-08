@@ -6,7 +6,7 @@
     SUBROUTINE WASP_FLUX (S, &
                              PZ0SEA,PTA,PEXNA,PRHOA,PSST,PEXNS,PQA,  &
             PVMOD,PZREF,PUREF,PPS,PQSAT,PSFTH,PSFTQ,PUSTAR,PCD,PCDN,PCH,PCE,PRI,&
-            PRESA,PRAIN,PZ0HSEA,PHS,PTP,PDIR_SW,PSCA_SW,PLW)  
+            PRESA,PRAIN,PZ0HSEA,PHS,PTP)  
 !     #######################################################################
 !
 !
@@ -80,7 +80,6 @@ USE MODD_SEAFLUX_n, ONLY : SEAFLUX_t
 USE MODD_CSTS,       ONLY : XKARMAN, XG, XRD, XRV, XPI, &
                             XLVTT, XCL, XCPD, XCPV, XTT, &
                             XP00
-USE MODD_OCEAN_CSTS, ONLY : XRHOSW, XALBEDOSW
 USE MODD_SURF_ATM,   ONLY : XVZ0CM
 !
 USE MODD_SFX_OASIS,  ONLY : LCPL_WAVE
@@ -122,9 +121,6 @@ REAL, DIMENSION(:), INTENT(IN)       :: PPS   ! air pressure at sea surface (Pa)
 REAL, DIMENSION(:), INTENT(IN)       :: PRAIN !precipitation rate (kg/s/m2)
 REAL, DIMENSION(:), INTENT(IN)       :: PHS   ! wave significant height
 REAL, DIMENSION(:), INTENT(IN)       :: PTP   ! wave peak period
-REAL, DIMENSION(:,:), INTENT(IN)  :: PDIR_SW ! radiative solar direct
-REAL, DIMENSION(:,:), INTENT(IN)  :: PSCA_SW ! radiative solar diffusive
-REAL, DIMENSION(:), INTENT(IN)  :: PLW ! longwave
 !
 REAL, DIMENSION(:), INTENT(INOUT)    :: PZ0SEA! roughness length over the ocean
 !                                                                                 
@@ -197,23 +193,8 @@ REAL, DIMENSION(SIZE(PTA))      :: ZUSTAR2  ! square of friction velocity
 !
 REAL, DIMENSION(SIZE(PTA))      :: ZDIRCOSZW! orography slope cosine (=1 on water!)
 REAL, DIMENSION(SIZE(PTA))      :: ZAC      ! Aerodynamical conductance
+REAL, DIMENSION(SIZE(PTA))      :: ZRR      ! Coef for heat roughness length
 !
-REAL, DIMENSION(SIZE(PTA))      :: ZAL
-REAL, DIMENSION(SIZE(PTA))      :: ZBIGC
-REAL, DIMENSION(SIZE(PTA))      :: ZWETC
-REAL, DIMENSION(SIZE(PTA))      :: ZDTCS
-REAL, DIMENSION(SIZE(PTA))      :: ZDQCS
-REAL, DIMENSION(SIZE(PTA))      :: ZTKT
-REAL, DIMENSION(SIZE(PTA))      :: ZLAMB
-REAL, DIMENSION(SIZE(PTA))      :: ZDELS
-REAL, DIMENSION(SIZE(PTA))      :: ZQOUT
-REAL, DIMENSION(SIZE(PTA))      :: ZCOL
-REAL, DIMENSION(SIZE(PTA))      :: ZRNL
-REAL, DIMENSION(SIZE(PTA))      :: ZRNS
-REAL, DIMENSION(SIZE(PTA))      :: ZALQ
-REAL, DIMENSION(SIZE(PTA))      :: ZHFI
-REAL, DIMENSION(SIZE(PTA))      :: ZEFI
-REAL, DIMENSION(SIZE(PTA))      :: ZRL
 !
 INTEGER, DIMENSION(SIZE(PTA))   :: ITERMAX             ! maximum number of iterations
 !
@@ -223,12 +204,9 @@ REAL    :: ZZBL                !atm. boundary layer depth (m)
 REAL    :: ZS                  !height of rougness length ref
 REAL    :: ZCH10               !transfer coef. at 10m
 REAL    :: ZMAXZO,ZMINZO       ! max and min values for z0
-REAL    :: ZBE
-REAL    :: ZCPW
-REAL    :: ZVISW
-REAL    :: ZCOOL
+REAL    :: ZALPHA1, ZBETA1     ! coefs for heat roughness length def
 !
-INTEGER :: J, JCS, JLOOP  !loop indice
+INTEGER :: J, JLOOP    !loop indice
 REAL(KIND=JPRB) :: ZHOOK_HANDLE
 !
 !-------------------------------------------------------------------------------
@@ -248,10 +226,8 @@ ZS        = 10.        ! Standard heigth =10m
 ZCH10     = 0.00115
 ZMAXZO    = 0.1        ! 10 cm max value for z0
 ZMINZO    = 0.000001   ! 10-6 m min value for z0
-ZBE       = 0.026      ! as in Fairall 1996 for cool skin
-ZCPW      = 4000.      ! as in Fairall 1996 for cool skin
-ZVISW     = 0.000001   ! viscosity of seawater
-ZCOOL     = 0.         ! 1 if cool skin scheme activated
+ZALPHA1   = 9.064E-6    ! CE2 CH2 param
+ZBETA1    = 1.032E-3   ! CE2 CH2 param
 !
 !       1.2   Array initialization by undefined values
 !
@@ -299,16 +275,9 @@ ZQASAT(:) = QSAT(ZTA(:),ZPA(:))
 !
 ZO(:)  = 0.0001
 ZWG(:) = 0.
-ZTKT(:) = 0.001
 IF (S%LPWG) ZWG(:) = 0.5
 !
-IF (S%LCSKIN) ZCOOL = 1.0
-!
 ZCHARN(:) = 0.011  
-ZRNS(:)   = 0.
-ZRNL(:)   = 0.
-ZRL(:)    = 0.
-ZDTCS(:) = 0.3      ! cool skin initialization
 !
 DO J=1,SIZE(PTA)
   !
@@ -316,17 +285,8 @@ DO J=1,SIZE(PTA)
   !    
   ZDU(J) = ZVMOD(J)   !wind speed difference with surface current(=0) (m/s)
                       !initial guess for gustiness factor
-  ZLV(J) = XLVTT + (XCPV-XCL)*(PSST(J)-XTT)
-  ZWETC(J) =  ZRDSRV*XLVTT*PQSAT(J)/(XRD*(PSST(J)**2))
-  ZDQCS(J) = ZWETC(J)*ZDTCS(J) !
   ZDT(J) = -(ZTA(J)/PEXNA(J)) + (PSST(J)/PEXNS(J)) !potential temperature difference
   ZDQ(J) = PQSAT(J)-PQA(J)                         !specific humidity difference
-  ZAL(J) = 2.1E-5*(PSST(J)-XTT+3.2)**0.79
-  ZBIGC(J) = 16*XG*ZCPW*(ZVISW*XRHOSW)**3/(ZRVSRDM1*ZRVSRDM1*PRHOA(J)*PRHOA(J))
-  ZRL(J) = PLW(J)
-  DO JCS=1,SIZE(PDIR_SW,2) 
-    ZRNS(J) = ZRNS(J) + (PDIR_SW(J,JCS)+PSCA_SW(J,JCS))*(1-XALBEDOSW)
-  END DO
   !
   ZDUWG(J) = SQRT(ZDU(J)**2+ZWG(J)**2)     !wind speed difference including gustiness ZWG
   !
@@ -351,7 +311,7 @@ DO J=1,SIZE(PTA)
   ZRIBCU(J) = -PUREF(J)/(ZZBL*0.004*ZBETAGUST**3) !saturation or plateau Rib
   !ZRIBU(J) =-XG*PUREF(J)*(ZDT(J)+ZRVSRDM1*(ZTA(J)-XTT)*ZDQ)/&
   !     &((ZTA(J)-XTT)*ZDUWG(J)**2)
-  ZRIBU(J)  = -XG*PUREF(J)*((ZDT(J)-ZDTCS(J)*ZCOOL)+ZRVSRDM1*ZTA(J)*ZDQ(J))/&
+  ZRIBU(J)  = -XG*PUREF(J)*(ZDT(J)+ZRVSRDM1*ZTA(J)*ZDQ(J))/&
                (ZTA(J)*ZDUWG(J)**2)  
   !
   IF (ZRIBU(J)<0.) THEN
@@ -366,12 +326,10 @@ ENDDO
 !
 !  First guess M-O stability dependent scaling params. (u*,T*,q*) to estimate ZO and z/L (ZZL)
 ZUSR(:) = ZDUWG(:)*XKARMAN/(LOG(PUREF(:)/ZO10(:))-PSIFCTUW(PUREF(:)/ZL10(:)))
-ZTSR(:) = -(ZDT(:)-ZCOOL*ZDTCS(:))*XKARMAN/(LOG(PZREF(:)/ZOT10(:))-PSIFCTTW(PZREF(:)/ZL10(:)))
-ZQSR(:) = -(ZDQ(:)-ZWETC(:)*ZDTCS(:)*ZCOOL)*XKARMAN/(LOG(PZREF(:)/ZOT10(:))-PSIFCTTW(PZREF(:)/ZL10(:)))
+ZTSR(:) = -ZDT(:)*XKARMAN/(LOG(PZREF(:)/ZOT10(:))-PSIFCTTW(PZREF(:)/ZL10(:)))
+ZQSR(:) = -ZDQ(:)*XKARMAN/(LOG(PZREF(:)/ZOT10(:))-PSIFCTTW(PZREF(:)/ZL10(:)))
 !
 ZZL(:) = 0.0
-ZHFI(:) = 0.0
-ZEFI(:) = 0.0
 !
 DO J=1,SIZE(PTA)
   !
@@ -396,17 +354,18 @@ DO J=1,SIZE(PTA)
   ZCWAVE(J) = XG*ZTWAVE(J)/(2.*XPI)
   ZWAGE(J) = ZCWAVE(J)/ZUSR(J)
   !
+  ZRR(J) = ZALPHA1*ZDUWG(J)+ZBETA1
+  ZRR(J) = MAX(1.15E-3 , ZRR(J))
+  ! 
+  ZCHARN(J) = CHARNOCK_WA(ZVMOD(J), ZWAGE(J))
 ENDDO
 !
-   
 !
 DO JLOOP=1,MAXVAL(ITERMAX) ! begin of iterative loop
   !
   DO J=1,SIZE(PTA)
     !
     IF (JLOOP.GT.ITERMAX(J)) CYCLE
-    !
-    ZCHARN(J) = CHARNOCK_WA(ZVMOD(J), ZWAGE(J))
     !
     ZO(J) = ZCHARN(J)*ZUSR(J)*ZUSR(J)/XG + 0.11*ZVISA(J)/ZUSR(J) !Smith 1988
     !! limits for ZO values
@@ -417,7 +376,8 @@ DO JLOOP=1,MAXVAL(ITERMAX) ! begin of iterative loop
         ZO(J) = ZMINZO
     ENDIF
     !
-    ZOT(J) = PZREF(J) * EXP(-(XKARMAN**2)/(ZCH10*LOG(PUREF(J)/ZO(J))))
+    ZOT(J) = PZREF(J) * EXP(-XKARMAN*ZUSR(J)/(ZRR(J)*ZDUWG(J)))
+!!    ZOT(J) = PZREF(J) * EXP(-(XKARMAN**2)/(ZCH10*LOG(PUREF(J)/ZO(J))))
     ZOQ(J) = ZOT(J)
     !
     ZZL(J) = XKARMAN * XG * PUREF(J) * &
@@ -438,8 +398,8 @@ DO JLOOP=1,MAXVAL(ITERMAX) ! begin of iterative loop
     !             3.1 scale parameters
     !
     ZUSR(J) = ZDUWG(J)*XKARMAN/(LOG(PUREF(J)/ZO(J)) -ZPUZ(J))
-    ZTSR(J) = -(ZDT(J)-ZDTCS(J)*ZCOOL)  *XKARMAN/(LOG(PZREF(J)/ZOT(J))-ZPTZ(J))
-    ZQSR(J) = -(ZDQ(J)-ZWETC(J)*ZDTCS(J)*ZCOOL)  *XKARMAN/(LOG(PZREF(J)/ZOQ(J))-ZPQZ(J))
+    ZTSR(J) = -ZDT(J)  *XKARMAN/(LOG(PZREF(J)/ZOT(J))-ZPTZ(J))
+    ZQSR(J) = -ZDQ(J)  *XKARMAN/(LOG(PZREF(J)/ZOQ(J))-ZPQZ(J))
     !
     !             3.2 Gustiness factor (ZWG)
     !
@@ -453,27 +413,6 @@ DO JLOOP=1,MAXVAL(ITERMAX) ! begin of iterative loop
     ENDIF  
     ZDUWG(J) = SQRT(ZVMOD(J)**2 + ZWG(J)**2)
     !
-    !           3.3 Cool skin parameters
-    !
-    ZRNL(J) = 0.97*(5.67E-8*(PSST(J)-ZDTCS(J)*ZCOOL)**4-ZRL(J))
-    ZHFI(J)  =  -PRHOA(J)*XCPD*ZUSR(J)*ZTSR(J)
-    ZEFI(J)  =  -PRHOA(J)*ZLV(J)*ZUSR(J)*ZQSR(J)
-    ZQOUT(J) = ZRNL(J) + ZHFI(J) + ZEFI(J)
-    ZDELS(J) = ZRNS(J) * (0.065 + 11 * ZTKT(J) - 6.6E-5 / ZTKT(J) * (1 - EXP(-ZTKT(J)/8.0E-4)))
-    ZCOL(J) = ZQOUT(J) - ZDELS(J)
-    ZALQ(J) = ZAL(J) * ZCOL(J) + ZBE * ZEFI(J) * ZCPW / ZLV(J)
-    !
-    IF (ZALQ(J) .GT. 0) THEN 
-      ZLAMB(J) = 6/(1 + (ZBIGC(J) * ZALQ(J) / ZUSR(J)**4)**0.75)**0.333  ! Eq 13 Saunders
-      ZTKT(J) = ZLAMB(J) * ZVISW / (SQRT(PRHOA(J)/XRHOSW) * ZUSR(J))  ! Eq 11 sub thk
-    ELSE
-      ZLAMB(J) = 6.0
-      ZTKT(J) = MIN(0.01,ZLAMB(J)*ZVISW/(SQRT(PRHOA(J)/XRHOSW) * ZUSR(J)))
-    ENDIF
-    !
-    ZDTCS(J) = ZCOL(J) * ZTKT(J) / ZRVSRDM1
-    ZDQCS(J) = ZWETC(J) * ZDTCS(J)
-    
   ENDDO
   !
 ENDDO
@@ -497,8 +436,8 @@ DO J=1,SIZE(PTA)
   !                 and neutral PCDN, ZCHN, ZCEN 
   !
   PCD(J) = (ZUSR(J)/ZDUWG(J))**2.
-  PCH(J) = ZUSR(J)*ZTSR(J)/(ZDUWG(J)*(ZTA(J)*PEXNS(J)/PEXNA(J)-PSST(J)+ZDTCS(J)*ZCOOL))
-  PCE(J) = ZUSR(J)*ZQSR(J)/(ZDUWG(J)*(PQA(J)-PQSAT(J)+ZDQCS(J)*ZCOOL))
+  PCH(J) = ZUSR(J)*ZTSR(J)/(ZDUWG(J)*(ZTA(J)*PEXNS(J)/PEXNA(J)-PSST(J)))
+  PCE(J) = ZUSR(J)*ZQSR(J)/(ZDUWG(J)*(PQA(J)-PQSAT(J)))
   !
   PCDN(J) = (XKARMAN/LOG(ZS/ZO(J)))**2.
   ZCHN(J) = (XKARMAN/LOG(ZS/ZO(J)))*(XKARMAN/LOG(ZS/ZOT(J)))
@@ -506,76 +445,66 @@ DO J=1,SIZE(PTA)
   !
   PZ0SEA(:) = ZCHARN(J) * ZUSR(J) * ZUSR(J) / XG + XVZ0CM * PCD(J) / PCDN(J)
   !
-!!  ZLV(J) = XLVTT + (XCPV-XCL)*(PSST(J)-XTT)
+  ZLV(J) = XLVTT + (XCPV-XCL)*(PSST(J)-XTT)
   !
   !            4. 2 surface fluxes 
   !
-  IF (ABS(PCDN(J))>1.E-2) THEN   !!!! secure WASP CODE 
-    write(*,*) 'pb PCDN in WASP: ',PCDN(J)
-    write(*,*) 'point: ',J,"/",SIZE(PTA)
-    write(*,*) 'roughness: ', ZO(J)
-    write(*,*) 'ustar: ',ZUSR(J)
-    write(*,*) 'wind: ',ZDUWG(J)
-    write(*,*) 'charn:',ZCHARN(J)
-    CALL ABOR1_SFX('WASP: PCDN too large -> no convergence')
-  ELSE
-    ZTSR(J) = -ZTSR(J)
-    ZQSR(J) = -ZQSR(J)
-    ZTAU(J) = -PRHOA(J)*ZUSR(J)*ZUSR(J)*ZVMOD(J)/ZDUWG(J)
-    ZHF(J)  =  PRHOA(J)*XCPD*ZUSR(J)*ZTSR(J)
-    ZEF(J)  =  PRHOA(J)*ZLV(J)*ZUSR(J)*ZQSR(J)
-    !    
-    !           4.3 Contributions to surface  fluxes due to rainfall
-    !
-    ! SB: a priori, le facteur ZRDSRV=XRD/XRV est introduit pour
-    !     adapter la formule de Clausius-Clapeyron (pour l'air
-    !     sec) au cas humide.
-    IF (S%LPRECIP) THEN
-      ! 
-      ! heat surface  fluxes
-      !
-      ZTAC(J)  = ZTA(J)-XTT
-      !
-      ZXLR(J)  = XLVTT + (XCPV-XCL)* ZTAC(J)                            ! latent heat of rain vaporization
-      ZDQSDT(J)= ZQASAT(J) * ZXLR(J) / (XRD*ZTA(J)**2)                  ! Clausius-Clapeyron relation
-      ZDTMP(J) = (1.0 + 3.309e-3*ZTAC(J) -1.44e-6*ZTAC(J)*ZTAC(J)) * &  !heat diffusivity
-                  0.02411 / (PRHOA(J)*XCPD)
-      !
-      ZDWAT(J) = 2.11e-5 * (XP00/ZPA(J)) * (ZTA(J)/XTT)**1.94           ! water vapour diffusivity from eq (13.3)
-      !                                                                 ! of Pruppacher and Klett (1978)      
-      ZALFAC(J)= 1.0 / (1.0 + &                                         ! Eq.11 in GoF95
-                   ZRDSRV*ZDQSDT(J)*ZXLR(J)*ZDWAT(J)/(ZDTMP(J)*XCPD))   ! ZALFAC=wet-bulb factor (sans dim)     
-      ZCPLW(J) = 4224.8482 + ZTAC(J) * &
-                              ( -4.707 + ZTAC(J) * &
-                                (0.08499 + ZTAC(J) * &
-                                  (1.2826e-3 + ZTAC(J) * &
-                                    (4.7884e-5 - 2.0027e-6* ZTAC(J))))) ! specific heat  
-      !       
-      ZRF(J)   = PRAIN(J) * ZCPLW(J) * ZALFAC(J) * &                    !Eq.12 in GoF95 !SIGNE?
-                   (PSST(J) - ZTA(J) -ZDTCS(J) * ZCOOL + (PQSAT(J)-PQA(J) - ZDQCS(J) * ZCOOL )*ZXLR(J)/XCPD )
-      !
-      ! Momentum flux due to rainfall  
-      !
-      ZTAUR(J)=-0.85*(PRAIN(J) *ZVMOD(J)) !pp3752 in FBR96
-      !
-    ENDIF
-    !
-    !             4.4   Webb correction to latent heat flux
+  ZTSR(J) = -ZTSR(J)
+  ZQSR(J) = -ZQSR(J)
+  ZTAU(J) = -PRHOA(J)*ZUSR(J)*ZUSR(J)*ZVMOD(J)/ZDUWG(J)
+  ZHF(J)  =  PRHOA(J)*XCPD*ZUSR(J)*ZTSR(J)
+  ZEF(J)  =  PRHOA(J)*ZLV(J)*ZUSR(J)*ZQSR(J)
+  !    
+  !           4.3 Contributions to surface  fluxes due to rainfall
+  !
+  ! SB: a priori, le facteur ZRDSRV=XRD/XRV est introduit pour
+  !     adapter la formule de Clausius-Clapeyron (pour l'air
+  !     sec) au cas humide.
+  IF (S%LPRECIP) THEN
     ! 
-    ZWBAR(J)=- (1./ZRDSRV)*ZUSR(J)*ZQSR(J) / (1.0+(1./ZRDSRV)*PQA(J)) &
-               - ZUSR(J)*ZTSR(J)/ZTA(J)                        ! Eq.21*rhoa in FBR96    
+    ! heat surface  fluxes
     !
-    !             4.5   friction velocity which contains correction du to rain            
+    ZTAC(J)  = ZTA(J)-XTT
     !
-    ZUSTAR2(J)= - (ZTAU(J) + ZTAUR(J)) / PRHOA(J)
-    PUSTAR(J) =  SQRT(ZUSTAR2(J))
+    ZXLR(J)  = XLVTT + (XCPV-XCL)* ZTAC(J)                            ! latent heat of rain vaporization
+    ZDQSDT(J)= ZQASAT(J) * ZXLR(J) / (XRD*ZTA(J)**2)                  ! Clausius-Clapeyron relation
+    ZDTMP(J) = (1.0 + 3.309e-3*ZTAC(J) -1.44e-6*ZTAC(J)*ZTAC(J)) * &  !heat diffusivity
+                0.02411 / (PRHOA(J)*XCPD)
     !
-    !             4.6   Total surface fluxes
-    !           
-    PSFTH (J) =  ZHF(J) + ZRF(J)
-    PSFTQ (J) =  ZEF(J) / ZLV(J)
-    ! 
+    ZDWAT(J) = 2.11e-5 * (XP00/ZPA(J)) * (ZTA(J)/XTT)**1.94           ! water vapour diffusivity from eq (13.3)
+    !                                                                 ! of Pruppacher and Klett (1978)      
+    ZALFAC(J)= 1.0 / (1.0 + &                                         ! Eq.11 in GoF95
+                 ZRDSRV*ZDQSDT(J)*ZXLR(J)*ZDWAT(J)/(ZDTMP(J)*XCPD))   ! ZALFAC=wet-bulb factor (sans dim)     
+    ZCPLW(J) = 4224.8482 + ZTAC(J) * &
+                            ( -4.707 + ZTAC(J) * &
+                              (0.08499 + ZTAC(J) * &
+                                (1.2826e-3 + ZTAC(J) * &
+                                  (4.7884e-5 - 2.0027e-6* ZTAC(J))))) ! specific heat  
+    !       
+    ZRF(J)   = PRAIN(J) * ZCPLW(J) * ZALFAC(J) * &                    !Eq.12 in GoF95 !SIGNE?
+                 (PSST(J) - ZTA(J) + (PQSAT(J)-PQA(J))*ZXLR(J)/XCPD )
+    !
+    ! Momentum flux due to rainfall  
+    !
+    ZTAUR(J)=-0.85*(PRAIN(J) *ZVMOD(J)) !pp3752 in FBR96
+    !
   ENDIF
+  !
+  !             4.4   Webb correction to latent heat flux
+  ! 
+  ZWBAR(J)=- (1./ZRDSRV)*ZUSR(J)*ZQSR(J) / (1.0+(1./ZRDSRV)*PQA(J)) &
+             - ZUSR(J)*ZTSR(J)/ZTA(J)                        ! Eq.21*rhoa in FBR96    
+  !
+  !             4.5   friction velocity which contains correction du to rain            
+  !
+  ZUSTAR2(J)= - (ZTAU(J) + ZTAUR(J)) / PRHOA(J)
+  PUSTAR(J) =  SQRT(ZUSTAR2(J))
+  !
+  !             4.6   Total surface fluxes
+  !           
+  PSFTH (J) =  ZHF(J) + ZRF(J)
+  PSFTQ (J) =  ZEF(J) / ZLV(J)
+  ! 
 ENDDO                      
 !-------------------------------------------------------------------------------
 !

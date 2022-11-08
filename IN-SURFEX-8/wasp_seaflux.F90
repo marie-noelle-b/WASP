@@ -9,7 +9,7 @@
                                 PRAIN,PSNOW,PVMOD,PZREF,PUREF,PPS,     &
                                 PQSAT,PSFTH,PSFTQ,PUSTAR,  &
                                 PCD,PCDN,PCH,PCE,PRI,PRESA,PZ0HSEA, &
-                                PHS,PTP,PDIR_SW,PSCA_SW,PLW )
+                                PHS,PTP )
 !     ##################################################################
 !
 !
@@ -83,9 +83,6 @@ REAL, DIMENSION(:), INTENT(IN)    :: PEXNS ! Exner function at sea surface
 REAL, DIMENSION(:), INTENT(IN)    :: PPS   ! air pressure at sea surface (Pa)
 REAL, DIMENSION(:), INTENT(IN)    :: PRAIN ! precipitation rate (kg/s/m2)
 REAL, DIMENSION(:), INTENT(IN)    :: PSNOW ! snow rate (kg/s/m2)
-REAL, DIMENSION(:,:), INTENT(IN)  :: PDIR_SW ! radiative solar direct
-REAL, DIMENSION(:,:), INTENT(IN)  :: PSCA_SW ! radiative solar diffusive
-REAL, DIMENSION(:), INTENT(IN)  :: PLW ! longwave
 !                                                                                 
 !  surface fluxes : latent heat, sensible heat, friction fluxes
 REAL, DIMENSION(:), INTENT(OUT)      :: PSFTH ! heat flux (W/m2)
@@ -164,8 +161,6 @@ SUBROUTINE TREAT_SURF(KMASK,YTYPE)
 INTEGER, INTENT(IN), DIMENSION(:) :: KMASK
  CHARACTER(LEN=1), INTENT(IN) :: YTYPE
 !
-INTEGER :: JSWB
-!
 REAL, DIMENSION(SIZE(KMASK))      :: ZW_TA   ! air temperature at atm. level (K)
 REAL, DIMENSION(SIZE(KMASK))      :: ZW_QA   ! air humidity at atm. level (kg/kg)
 REAL, DIMENSION(SIZE(KMASK))      :: ZW_EXNA ! Exner function at atm. level
@@ -182,10 +177,6 @@ REAL, DIMENSION(SIZE(KMASK))      :: ZW_RAIN !precipitation rate (kg/s/m2)
 REAL, DIMENSION(SIZE(KMASK))      :: ZW_SNOW !snow rate (kg/s/m2)
 !
 REAL, DIMENSION(SIZE(KMASK))      :: ZW_Z0SEA! roughness length over the ocean
-! radiative fluxes downward
-REAL, DIMENSION(SIZE(KMASK),SIZE(PDIR_SW,2))    :: ZW_DIR_SW ! radiative solar direct
-REAL, DIMENSION(SIZE(KMASK),SIZE(PDIR_SW,2))    :: ZW_SCA_SW ! radiative solar diffusive
-REAL, DIMENSION(SIZE(KMASK))      :: ZW_LW ! longwave
 !                                                                                 
 !  surface fluxes : latent heat, sensible heat, friction fluxes
 REAL, DIMENSION(SIZE(KMASK))      :: ZW_SFTH ! heat flux (W/m2)
@@ -222,11 +213,6 @@ DO JJ=1, SIZE(KMASK)
   ZW_RAIN(JJ) = PRAIN(KMASK(JJ))
   ZW_SNOW(JJ) = PSNOW(KMASK(JJ))
   ZW_Z0SEA(JJ)= S%XZ0(KMASK(JJ))
-  ZW_LW(JJ)=PLW(KMASK(JJ))
-  DO JSWB=1, SIZE(PDIR_SW,2) 
-    ZW_DIR_SW(JJ,JSWB)=PDIR_SW(KMASK(JJ),JSWB)
-    ZW_SCA_SW(JJ,JSWB)=PSCA_SW(KMASK(JJ),JSWB)
-  END DO
 ENDDO
 !  
 ZW_SFTH(:)   = XUNDEF
@@ -246,7 +232,7 @@ IF (YTYPE=='W') THEN
   CALL WASP_FLUX(S, &
                     ZW_Z0SEA,ZW_TA,ZW_EXNA,ZW_RHOA,ZW_SST,ZW_EXNS,&
         ZW_QA,ZW_VMOD,ZW_ZREF,ZW_UREF,ZW_PS,ZW_QSAT,ZW_SFTH,ZW_SFTQ,ZW_USTAR,&
-        ZW_CD,ZW_CDN,ZW_CH,ZW_CE,ZW_RI,ZW_RESA,ZW_RAIN,ZW_Z0HSEA,ZW_HS,ZW_TP,ZW_DIR_SW,ZW_SCA_SW,ZW_LW)   
+        ZW_CD,ZW_CDN,ZW_CH,ZW_CE,ZW_RI,ZW_RESA,ZW_RAIN,ZW_Z0HSEA,ZW_HS,ZW_TP)   
   !
 ELSEIF ( (YTYPE=='I') .AND. (.NOT. S%LHANDLE_SIC)) THEN
   !

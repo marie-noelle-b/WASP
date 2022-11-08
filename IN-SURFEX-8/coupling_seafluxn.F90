@@ -414,13 +414,13 @@ CALL COARE30_SEAFLUX(S, ZMASK, ISIZE_WATER, ISIZE_ICE,        &
               PSNOW, ZWIND, PZREF, PUREF, PPS, ZQSAT,         &
               ZSFTH, ZSFTQ, ZUSTAR,                           &
               ZCD, ZCDN, ZCH, ZCE, ZRI, ZRESA_SEA, ZZ0H     )
-CASE ('WASPV1')
+CASE ('WASPV2')
 CALL WASP_SEAFLUX(S, ZMASK, ISIZE_WATER, ISIZE_ICE,           &
               PTA, ZEXNA ,PRHOA, ZSST, ZEXNS, ZQA, PRAIN,     &
               PSNOW, ZWIND, PZREF, PUREF, PPS, ZQSAT,         &
               ZSFTH, ZSFTQ, ZUSTAR,                           &
               ZCD, ZCDN, ZCH, ZCE, ZRI, ZRESA_SEA, ZZ0H,      &
-              ZHS, ZTP, PDIR_SW, PSCA_SW, PLW )
+              ZHS, ZTP )
 END SELECT
 
 #ifdef CPLOASIS
