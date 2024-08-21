@@ -377,13 +377,13 @@ SELECT CASE (SM%S%CSEA_FLUX)
                       ZSFTH, ZSFTQ, ZUSTAR,                           &
                       ZCD, ZCDN, ZCH, ZCE, ZRI, ZRESA_SEA, ZZ0H,      &
                       SM%S%XHS, SM%S%XTP                                          )  
-CASE ('WASPV2')
-CALL WASP_SEAFLUX(SM%S, ZMASK, ISIZE_WATER, ISIZE_ICE,           &
+  CASE ('WASPV2')
+    CALL WASP_SEAFLUX(SM%S, ZMASK, ISIZE_WATER, ISIZE_ICE,    &
               PTA, ZEXNA ,PRHOA, ZSST, ZEXNS, ZQA, PRAIN,     &
               PSNOW, ZWIND, PZREF, PUREF, PPS, ZQSAT,         &
               ZSFTH, ZSFTQ, ZUSTAR,                           &
               ZCD, ZCDN, ZCH, ZCE, ZRI, ZRESA_SEA, ZZ0H,      &
-              SM%S%XHS, SM%S%XTP )
+              SM%S%XTP     )
 END SELECT
 !
 !-------------------------------------------------------------------------------------

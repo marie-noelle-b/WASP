@@ -6,7 +6,7 @@
     SUBROUTINE WASP_FLUX (S, &
                              PZ0SEA,PTA,PEXNA,PRHOA,PSST,PEXNS,PQA,  &
             PVMOD,PZREF,PUREF,PPS,PQSAT,PSFTH,PSFTQ,PUSTAR,PCD,PCDN,PCH,PCE,PRI,&
-            PRESA,PRAIN,PZ0HSEA,PHS,PTP)  
+            PRESA,PRAIN,PZ0HSEA,PTP)  
 !     #######################################################################
 !
 !
@@ -119,7 +119,6 @@ REAL, DIMENSION(:), INTENT(IN)       :: PSST  ! Sea Surface Temperature (K)
 REAL, DIMENSION(:), INTENT(IN)       :: PEXNS ! Exner function at sea surface
 REAL, DIMENSION(:), INTENT(IN)       :: PPS   ! air pressure at sea surface (Pa)
 REAL, DIMENSION(:), INTENT(IN)       :: PRAIN !precipitation rate (kg/s/m2)
-REAL, DIMENSION(:), INTENT(IN)       :: PHS   ! wave significant height
 REAL, DIMENSION(:), INTENT(IN)       :: PTP   ! wave peak period
 !
 REAL, DIMENSION(:), INTENT(INOUT)    :: PZ0SEA! roughness length over the ocean
